@@ -107,7 +107,8 @@
   .slot > .t.now { color: var(--accent); }
   .list { display: flex; flex-direction: column; gap: 6px; }
   .card { background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--c, #999); border-radius: 8px; padding: 8px 10px; }
-  .card.starred { box-shadow: inset 0 0 0 2px var(--accent); }
+  .card.starred { background: color-mix(in srgb, var(--accent) 7%, var(--card)); --sb: color-mix(in srgb, var(--accent) 22%, var(--line)); border-top-color: var(--sb); border-right-color: var(--sb); border-bottom-color: var(--sb); }
+  [data-theme=dark] .card.starred { background: color-mix(in srgb, var(--accent) 11%, var(--card)); }
   /* Up next bar */
   #upnext { display: none; gap: 8px; margin: 0 0 8px; }
   #upnext.show { display: flex; flex-wrap: wrap; }

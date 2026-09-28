@@ -95,7 +95,11 @@
   .chip.off .n { background: var(--line); color: var(--muted); }
   .chip.zero { opacity: .45; }
   .reset { border: 0; background: none; color: var(--accent); font-size: 12.5px; cursor: pointer; padding: 4px 6px; }
-  body.plan #tracks { display: none; }
+  body.plan #tracks, body.plan .roomsel { display: none; }
+  /* Room filter */
+  .roomsel { flex: 0 1 auto; max-width: 46%; height: 38px; padding: 0 10px; border: 1px solid var(--line); border-radius: 12px;
+    background: var(--card); cursor: pointer; }
+  .roomsel.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--card)); color: var(--accent); font-weight: 600; }
   @media (max-width: 560px) {
     #tracks { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 8px -14px 0; padding: 0 14px 2px;
       mask-image: linear-gradient(90deg, transparent, #000 14px, #000 calc(100% - 24px), transparent); }
@@ -260,6 +264,7 @@
       <span class="n" id="found"></span>
       <button type="button" class="clear" id="clearQ" title="Clear">✕</button>
     </label>
+    <select class="roomsel" id="room" title="Filter by room" aria-label="Filter by room"></select>
   </div>
   <div id="tracks"></div>
 </header>
@@ -2653,7 +2658,7 @@ const TRACK_COLORS = {
 const TRACK_ON = { 'Keynote': 'var(--on-soft)', 'My item': 'var(--on-soft)' };
 const KEY = 'aiconf2026-planner';
 const DEFAULT_CARD = { url: 'https://www.linkedin.com/in/lesia-barmina/', name: 'Lesia Barmina', sub: 'Scan to connect on LinkedIn' };
-const store = Object.assign({ starred: {}, notes: {}, custom: [], hiddenTracks: [], day: DAYS[0].key, view: 'all', card: DEFAULT_CARD },
+const store = Object.assign({ starred: {}, notes: {}, custom: [], hiddenTracks: [], room: '', day: DAYS[0].key, view: 'all', card: DEFAULT_CARD },
   JSON.parse(localStorage.getItem(KEY) || '{}'));
 const save = () => localStorage.setItem(KEY, JSON.stringify(store));
 
@@ -2728,7 +2733,14 @@ function render() {
   if (store.view === 'plan') list = list.filter(s => s.own || store.starred[s.id]);
   if (q) list = list.filter(s => [s.title, s.room, s.track, s.description, store.notes[s.id],
     ...s.speakers.flatMap(p => [p.name, p.organization, p.role])].join(' ').toLowerCase().includes(q));
-  // Chip counts reflect day + search, before the track filter itself is applied
+  // Room dropdown: counts reflect day + search; then filter (All sessions view only)
+  const roomSel = document.getElementById('room');
+  roomSel.innerHTML = `<option value="">📍 All rooms</option>` + ROOMS.map(r =>
+    `<option value="${esc(r)}">${esc(r)} (${list.filter(s => s.room === r).length})</option>`).join('');
+  roomSel.value = store.room;
+  roomSel.classList.toggle('on', !!store.room);
+  if (store.view === 'all' && store.room) list = list.filter(s => s.room === store.room);
+  // Chip counts reflect day + search + room, before the track filter itself is applied
   document.querySelectorAll('#tracks .chip').forEach(b => {
     const ts = GROUPS[b.dataset.g];
     const n = list.filter(s => ts.includes(s.track)).length;
@@ -2785,6 +2797,8 @@ function render() {
 // --- setup
 document.getElementById('days').innerHTML = DAYS.map(d => `<button class="day" data-d="${d.key}" title="${d.label}"></button>`).join('');
 const tracks = [...new Set(DATA.sessions.map(s => s.track))];
+const ROOMS = [...new Set(DATA.sessions.map(s => s.room).filter(Boolean))]
+  .sort((a, b) => b.startsWith('Theater') - a.startsWith('Theater') || a.localeCompare(b, 'en', { numeric: true }));
 // The three lunch formats share one chip
 const groupOf = t => t.startsWith('Lunch') ? 'Lunch talks' : t;
 const GROUPS = {};
@@ -2814,6 +2828,7 @@ document.addEventListener('click', e => {
   if (cardEl) openNotes(cardEl.dataset.id);
 });
 document.getElementById('q').addEventListener('input', render);
+document.getElementById('room').addEventListener('change', e => { store.room = e.target.value; save(); render(); scrollTo(0, 0); });
 document.getElementById('printBtn').onclick = () => print();
 document.getElementById('addBtn').onclick = () => document.getElementById('addForm').classList.toggle('show');
 document.getElementById('addForm').onsubmit = e => {

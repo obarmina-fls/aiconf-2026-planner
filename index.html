@@ -148,11 +148,22 @@
   #nm.show { display: flex; align-items: center; justify-content: center; }
   .sheet { width: min(720px, 100%); max-height: min(90vh, 900px); display: flex; flex-direction: column;
     background: var(--card); border-radius: 18px; box-shadow: 0 20px 60px rgb(0 0 0 / .4); border-top: 5px solid var(--c, var(--accent)); overflow: hidden; }
-  .nm-head { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px 10px; border-bottom: 1px solid var(--line); }
-  .nm-head > div { flex: 1; min-width: 0; }
-  .nm-kicker { font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--c, var(--accent)); }
-  .nm-title { font-weight: 700; font-size: 18px; line-height: 1.3; margin-top: 2px; }
-  .nm-x { flex: none; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line); background: var(--bg); cursor: pointer; font-size: 15px; }
+  /* Header grid: track + position and nav buttons on row 1, full-width title on row 2 */
+  .nm-head { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; row-gap: 6px; align-items: center; padding: 12px 16px 12px; border-bottom: 1px solid var(--line); }
+  .nm-head > div:first-child { display: contents; }
+  .nm-kicker { grid-row: 1; grid-column: 1; min-width: 0; font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--c, var(--accent)); }
+  .nm-head .nm-nav { grid-row: 1; grid-column: 2; }
+  .nm-title { grid-row: 2; grid-column: 1 / -1; font-weight: 700; font-size: 18px; line-height: 1.3; }
+  .nm-x { flex: none; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line); background: var(--bg); cursor: pointer; font-size: 15px;
+    display: grid; place-items: center; padding: 0; }
+  .nm-x:disabled { opacity: .3; cursor: default; }
+  .nm-x svg { width: 18px; height: 18px; }
+  .nm-nav { flex: none; display: flex; gap: 6px; }
+  .nm-pos { color: var(--muted); font-weight: 600; letter-spacing: 0; text-transform: none; margin-left: 6px; }
+  .nm-body.in-l { animation: inL .22s ease-out; }
+  .nm-body.in-r { animation: inR .22s ease-out; }
+  @keyframes inL { from { opacity: 0; transform: translateX(28px); } }
+  @keyframes inR { from { opacity: 0; transform: translateX(-28px); } }
   .nm-body { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 16px 16px; display: flex; flex-direction: column; gap: 12px; overscroll-behavior: contain; }
   .nm-when { font-size: 14px; }
   .nm-when b { font-weight: 600; }
@@ -269,7 +280,11 @@
   <div class="sheet" id="nmSheet" role="dialog" aria-modal="true" aria-labelledby="nmTitle">
     <div class="nm-head">
       <div><div class="nm-kicker" id="nmKicker"></div><div class="nm-title" id="nmTitle"></div></div>
-      <button class="nm-x" id="nmClose" title="Close" aria-label="Close">✕</button>
+      <div class="nm-nav">
+        <button class="nm-x" id="nmPrev" title="Previous session (←)" aria-label="Previous session"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
+        <button class="nm-x" id="nmNext" title="Next session (→)" aria-label="Next session"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
+        <button class="nm-x" id="nmClose" title="Close" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      </div>
     </div>
     <div class="nm-body">
     <div class="nm-when" id="nmWhen"></div>
@@ -2735,6 +2750,7 @@ function render() {
   count.classList.toggle('bad', !!clashCount);
 
   const out = document.getElementById('out');
+  shownIds = list.map(s => s.id);
   if (!list.length) {
     out.innerHTML = `<div class="empty">${store.view === 'plan' ? 'Nothing planned for this day yet — star ☆ sessions in “All sessions”.' : 'No sessions match.'}</div>`;
     return;
@@ -2835,6 +2851,7 @@ applyTheme();
 // --- Session sheet: details, plan toggle and notes (autosave, quick inserts, list continuation)
 const nm = document.getElementById('nm'), nmText = document.getElementById('nmText'), nmStatus = document.getElementById('nmStatus');
 let nmId = null;
+let shownIds = [], navIds = []; // navIds: snapshot of the visible list when the sheet opened, so starring/unstarring doesn't reshuffle it
 const growNotes = () => { nmText.style.height = 'auto'; nmText.style.height = Math.max(170, nmText.scrollHeight + 2) + 'px'; };
 function renderSheet() {
   const s = allSessions().find(x => x.id === nmId); if (!s) return;
@@ -2849,10 +2866,19 @@ function renderSheet() {
   star.innerHTML = on ? '<span class="s">★</span> In my plan' : '<span class="s">☆</span> Add to my plan';
 }
 function openNotes(id) {
-  const s = allSessions().find(x => x.id === id); if (!s) return;
+  navIds = shownIds.includes(id) ? shownIds.slice() : [id];
+  if (!fillSheet(id)) return;
+  nm.classList.add('show'); document.body.classList.add('modal-open');
+  history.pushState({ sheet: 1 }, ''); // Android back button closes the sheet instead of leaving the app
+}
+function fillSheet(id) {
+  const s = allSessions().find(x => x.id === id); if (!s) return false;
   nmId = id;
+  const i = navIds.indexOf(id);
+  document.getElementById('nmPrev').disabled = i <= 0;
+  document.getElementById('nmNext').disabled = i < 0 || i >= navIds.length - 1;
   document.getElementById('nmSheet').style.setProperty('--c', TRACK_COLORS[s.track] || 'var(--accent)');
-  document.getElementById('nmKicker').textContent = s.track;
+  document.getElementById('nmKicker').innerHTML = esc(s.track) + (navIds.length > 1 ? `<span class="nm-pos">${i + 1} / ${navIds.length}</span>` : '');
   document.getElementById('nmTitle').textContent = s.title;
   document.getElementById('nmWhen').innerHTML = `${DAYS.find(d => d.key === s.date).label} · <b>${fmt(s.s)}–${fmt(s.e)}</b> · 📍 <b>${esc(s.room || '—')}</b>`;
   document.getElementById('nmSpk').innerHTML = s.speakers.map(p =>
@@ -2864,11 +2890,37 @@ function openNotes(id) {
   nmText.value = store.notes[id] || '';
   nmStatusText();
   renderSheet();
-  nm.classList.add('show'); document.body.classList.add('modal-open');
   nm.querySelector('.nm-body').scrollTop = 0;
   growNotes();
-  history.pushState({ sheet: 1 }, ''); // Android back button closes the sheet instead of leaving the app
+  return true;
 }
+function navSheet(dir) {
+  const i = navIds.indexOf(nmId) + dir;
+  if (i < 0 || i >= navIds.length) return;
+  nmSave();
+  nmText.blur();
+  fillSheet(navIds[i]);
+  const body = nm.querySelector('.nm-body');
+  body.classList.remove('in-l', 'in-r'); void body.offsetWidth; body.classList.add(dir > 0 ? 'in-l' : 'in-r');
+}
+document.getElementById('nmPrev').onclick = () => navSheet(-1);
+document.getElementById('nmNext').onclick = () => navSheet(1);
+// Arrow keys (when not typing) and horizontal swipes (not starting in the notes box or the scrolling toolbar)
+document.addEventListener('keydown', e => {
+  if (!nm.classList.contains('show') || e.target === nmText) return;
+  if (e.key === 'ArrowLeft') navSheet(-1);
+  if (e.key === 'ArrowRight') navSheet(1);
+});
+let swipe = null;
+nm.addEventListener('touchstart', e => {
+  swipe = e.target.closest('textarea, .nm-tools') ? null : { x: e.touches[0].clientX, y: e.touches[0].clientY };
+}, { passive: true });
+nm.addEventListener('touchend', e => {
+  if (!swipe) return;
+  const dx = e.changedTouches[0].clientX - swipe.x, dy = e.changedTouches[0].clientY - swipe.y;
+  swipe = null;
+  if (Math.abs(dx) > 60 && Math.abs(dx) > 1.8 * Math.abs(dy)) navSheet(dx < 0 ? 1 : -1);
+}, { passive: true });
 function nmStatusText(saved) {
   const w = nmText.value.trim() ? nmText.value.trim().split(/\s+/).length : 0;
   nmStatus.innerHTML = (saved ? '<span class="ok">✓ Saved</span> · ' : '') + (w ? `${w} word${w === 1 ? '' : 's'}` : 'no notes yet');

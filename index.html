@@ -85,17 +85,19 @@
   .search.has .clear { display: block; }
   /* Track filter chips */
   #tracks { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
-  .chip { --tint: color-mix(in srgb, var(--c) 14%, var(--card)); display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 10px;
-    border-radius: 999px; font-size: 12.5px; font-weight: 500; cursor: pointer; user-select: none; white-space: nowrap;
-    background: var(--tint); border: 1px solid color-mix(in srgb, var(--c) 40%, transparent); transition: all .15s; }
-  .chip:hover { border-color: var(--c); }
-  .chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 2px color-mix(in srgb, var(--c) 25%, transparent); }
-  .chip .n { font-size: 11px; min-width: 18px; text-align: center; padding: 0 5px; border-radius: 999px; background: var(--c); color: var(--on-c, #fff); line-height: 17px; }
-  .chip.off { background: none; border: 1px dashed var(--line); color: var(--muted); }
-  .chip.off .dot { background: none; box-shadow: inset 0 0 0 1.5px var(--c); }
-  .chip.off .n { background: var(--line); color: var(--muted); }
-  .chip.zero { opacity: .45; }
-  .reset { border: 0; background: none; color: var(--accent); font-size: 12.5px; cursor: pointer; padding: 4px 6px; }
+  /* Track chips: "All" (default) or pick specific tracks. Unselected = neutral, selected = track colour. */
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 500;
+    cursor: pointer; user-select: none; white-space: nowrap; background: var(--card); border: 1px solid var(--line); color: var(--text); transition: all .15s; }
+  .chip:hover { border-color: color-mix(in srgb, var(--c) 60%, var(--line)); }
+  .chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+  .chip .n { font-size: 11px; min-width: 18px; text-align: center; padding: 0 5px; border-radius: 999px; background: var(--bg); color: var(--muted); line-height: 17px; }
+  .chip.sel { background: color-mix(in srgb, var(--c) 15%, var(--card)); border-color: color-mix(in srgb, var(--c) 55%, transparent); font-weight: 600; }
+  .chip.sel .dot { box-shadow: 0 0 0 2px color-mix(in srgb, var(--c) 30%, transparent); }
+  .chip.sel .n { background: var(--c); color: var(--on-c, #fff); }
+  .chip.all { padding-left: 12px; }
+  .chip.all.sel { background: var(--accent-bg); border-color: var(--accent-bg); color: #fff; }
+  .chip.all.sel .n { background: rgb(255 255 255 / .25); color: #fff; }
+  .chip.zero:not(.sel) { opacity: .45; }
   body.plan #tracks, body.plan .roomsel { display: none; }
   /* Room filter */
   /* Styled like the search box; the native <select> stays (best picker on phones) but loses its default chrome */
@@ -2706,8 +2708,9 @@ const TRACK_COLORS = {
 const TRACK_ON = { 'Keynote': 'var(--on-soft)', 'My item': 'var(--on-soft)' };
 const KEY = 'aiconf2026-planner';
 const DEFAULT_CARD = { url: 'https://www.linkedin.com/in/lesia-barmina/', name: 'Lesia Barmina', sub: 'Scan to connect on LinkedIn' };
-const store = Object.assign({ starred: {}, notes: {}, custom: [], hiddenTracks: [], room: '', day: DAYS[0].key, view: 'all', card: DEFAULT_CARD },
+const store = Object.assign({ starred: {}, notes: {}, custom: [], onlyTracks: [], room: '', day: DAYS[0].key, view: 'all', card: DEFAULT_CARD },
   JSON.parse(localStorage.getItem(KEY) || '{}'));
+delete store.hiddenTracks; // replaced by onlyTracks
 const save = () => localStorage.setItem(KEY, JSON.stringify(store));
 
 const toMin = t => { const m = /(\d+):(\d+)\s*(AM|PM)/i.exec(t || ''); if (!m) return null;
@@ -2790,14 +2793,14 @@ function render() {
   if (store.view === 'all' && store.room) list = list.filter(s => s.room === store.room);
   // Chip counts reflect day + search + room, before the track filter itself is applied
   document.querySelectorAll('#tracks .chip').forEach(b => {
+    if (b.dataset.g === '*') { b.classList.toggle('sel', !store.onlyTracks.length); b.querySelector('.n').textContent = list.length; return; }
     const ts = GROUPS[b.dataset.g];
     const n = list.filter(s => ts.includes(s.track)).length;
-    b.classList.toggle('off', ts.every(x => store.hiddenTracks.includes(x)));
+    b.classList.toggle('sel', ts.some(x => store.onlyTracks.includes(x)));
     b.classList.toggle('zero', !n);
     b.querySelector('.n').textContent = n;
   });
-  document.getElementById('resetTracks').hidden = !store.hiddenTracks.length;
-  if (store.view === 'all') list = list.filter(s => !store.hiddenTracks.includes(s.track));
+  if (store.view === 'all' && store.onlyTracks.length) list = list.filter(s => store.onlyTracks.includes(s.track));
   document.getElementById('searchBox').classList.toggle('has', !!q);
   document.getElementById('found').textContent = q ? `${list.length} found` : '';
 
@@ -2851,9 +2854,9 @@ const ROOMS = [...new Set(DATA.sessions.map(s => s.room).filter(Boolean))]
 const groupOf = t => t.startsWith('Lunch') ? 'Lunch talks' : t;
 const GROUPS = {};
 tracks.forEach(t => (GROUPS[groupOf(t)] ??= []).push(t));
-document.getElementById('tracks').innerHTML = Object.entries(GROUPS).map(([g, ts]) =>
-  `<span class="chip" data-g="${esc(g)}" style="--c:${TRACK_COLORS[ts[0]] || '#999'};--on-c:${TRACK_ON[ts[0]] || '#fff'}" title="Click to hide/show · Ctrl+click to show only this"><span class="dot"></span>${esc(g)}<span class="n"></span></span>`).join('')
-  + '<button class="reset" id="resetTracks" hidden>Show all</button>';
+document.getElementById('tracks').innerHTML = '<span class="chip all" data-g="*" style="--c:var(--accent)" title="Show all tracks">All<span class="n"></span></span>'
+  + Object.entries(GROUPS).map(([g, ts]) =>
+  `<span class="chip" data-g="${esc(g)}" style="--c:${TRACK_COLORS[ts[0]] || '#999'};--on-c:${TRACK_ON[ts[0]] || '#fff'}" title="Show only this track (tap more to add)"><span class="dot"></span>${esc(g)}<span class="n"></span></span>`).join('');
 document.getElementById('foot').textContent =
   `${DATA.sessions.length} sessions · data fetched ${new Date(DATA.fetchedAt).toLocaleString()} · plan is saved in this browser (use Export to back it up)`;
 
@@ -2862,13 +2865,16 @@ document.addEventListener('click', e => {
   if (t.closest('#days button')) { store.day = t.closest('button').dataset.d; save(); render(); scrollTo(0, 0); return; }
   if (t.closest('#views button')) { store.view = t.closest('button').dataset.v; save(); render(); scrollTo(0, 0); return; }
   if (t.closest('#clearRoom')) { e.preventDefault(); store.room = ''; save(); render(); return; }
-  if (t.id === 'resetTracks') { store.hiddenTracks = []; save(); render(); return; }
   if (t.id === 'clearQ') { e.preventDefault(); const q = document.getElementById('q'); q.value = ''; q.focus(); render(); return; }
   const chip = t.closest('#tracks .chip');
   if (chip) {
-    const ts = GROUPS[chip.dataset.g], h = store.hiddenTracks;
-    if (e.altKey || e.ctrlKey || e.metaKey) store.hiddenTracks = tracks.filter(x => !ts.includes(x)); // solo
-    else store.hiddenTracks = ts.every(x => h.includes(x)) ? h.filter(x => !ts.includes(x)) : [...new Set(h.concat(ts))];
+    // "All" clears the selection; a track toggles in/out of it (deselecting the last one falls back to All)
+    const g = chip.dataset.g, sel = store.onlyTracks;
+    if (g === '*') store.onlyTracks = [];
+    else {
+      const ts = GROUPS[g];
+      store.onlyTracks = ts.some(x => sel.includes(x)) ? sel.filter(x => !ts.includes(x)) : [...new Set(sel.concat(ts))];
+    }
     save(); render(); return;
   }
   if (t.dataset.star) { const id = t.dataset.star; store.starred[id] ? delete store.starred[id] : store.starred[id] = true; save(); render(); return; }

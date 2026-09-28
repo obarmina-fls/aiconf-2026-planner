@@ -73,7 +73,8 @@
     .day .dw i { display: none; } .day .dn { font-size: 26px; } }
   .btn.small { padding: 2px 9px; font-size: 13px; }
   /* Search */
-  .search { flex: 1; min-width: 180px; display: flex; align-items: center; gap: 8px; padding: 0 6px 0 12px; height: 38px;
+  .findrow { flex-wrap: nowrap; }
+  .search { flex: 1; min-width: 44%; display: flex; align-items: center; gap: 8px; padding: 0 6px 0 12px; height: 38px;
     background: var(--card); border: 1px solid var(--line); border-radius: 12px; transition: border-color .15s, box-shadow .15s; }
   .search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
   .search svg { flex: none; color: var(--muted); }
@@ -97,9 +98,22 @@
   .reset { border: 0; background: none; color: var(--accent); font-size: 12.5px; cursor: pointer; padding: 4px 6px; }
   body.plan #tracks, body.plan .roomsel { display: none; }
   /* Room filter */
-  .roomsel { flex: 0 1 auto; max-width: 46%; height: 38px; padding: 0 10px; border: 1px solid var(--line); border-radius: 12px;
-    background: var(--card); cursor: pointer; }
-  .roomsel.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--card)); color: var(--accent); font-weight: 600; }
+  /* Styled like the search box; the native <select> stays (best picker on phones) but loses its default chrome */
+  .roomsel { position: relative; flex: 0 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px; height: 38px; padding: 0 10px;
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px; color: var(--muted); transition: border-color .15s, box-shadow .15s, background .15s; }
+  .roomsel:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+  .roomsel > svg { flex: none; width: 15px; height: 15px; }
+  .roomsel select { -webkit-appearance: none; appearance: none; min-width: 0; flex: 1; border: 0; outline: 0; background: none; padding: 0 18px 0 0;
+    color: var(--text); cursor: pointer; text-overflow: ellipsis; }
+  .roomsel select option { color: var(--text); background: var(--card); }
+  .roomsel .chev { position: absolute; right: 10px; pointer-events: none; }
+  .roomsel .rclear { display: none; flex: none; border: 0; background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent);
+    width: 22px; height: 22px; border-radius: 50%; cursor: pointer; padding: 0; place-items: center; }
+  .roomsel .rclear svg { width: 12px; height: 12px; }
+  .roomsel.on { background: color-mix(in srgb, var(--accent) 9%, var(--card)); border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); color: var(--accent); }
+  .roomsel.on select { color: var(--accent); font-weight: 600; padding-right: 0; }
+  .roomsel.on .chev { display: none; }
+  .roomsel.on .rclear { display: grid; }
   @media (max-width: 560px) {
     #tracks { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 8px -14px 0; padding: 0 14px 2px;
       mask-image: linear-gradient(90deg, transparent, #000 14px, #000 calc(100% - 24px), transparent); }
@@ -257,14 +271,19 @@
       <button data-v="plan">★ My plan<span id="count"></span></button>
     </div>
   </div>
-  <div class="row">
+  <div class="row findrow">
     <label class="search" id="searchBox">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-      <input type="search" id="q" placeholder="Search talks, speakers, companies…" autocomplete="off">
+      <input type="search" id="q" placeholder="Search talks, speakers…" autocomplete="off">
       <span class="n" id="found"></span>
       <button type="button" class="clear" id="clearQ" title="Clear">✕</button>
     </label>
-    <select class="roomsel" id="room" title="Filter by room" aria-label="Filter by room"></select>
+    <label class="roomsel" id="roomBox" title="Filter by room">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>
+      <select id="room" aria-label="Filter by room"></select>
+      <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+      <button type="button" class="rclear" id="clearRoom" title="All rooms" aria-label="Show all rooms"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </label>
   </div>
   <div id="tracks"></div>
 </header>
@@ -2735,10 +2754,10 @@ function render() {
     ...s.speakers.flatMap(p => [p.name, p.organization, p.role])].join(' ').toLowerCase().includes(q));
   // Room dropdown: counts reflect day + search; then filter (All sessions view only)
   const roomSel = document.getElementById('room');
-  roomSel.innerHTML = `<option value="">📍 All rooms</option>` + ROOMS.map(r =>
+  roomSel.innerHTML = `<option value="">All rooms</option>` + ROOMS.map(r =>
     `<option value="${esc(r)}">${esc(r)} (${list.filter(s => s.room === r).length})</option>`).join('');
   roomSel.value = store.room;
-  roomSel.classList.toggle('on', !!store.room);
+  document.getElementById('roomBox').classList.toggle('on', !!store.room);
   if (store.view === 'all' && store.room) list = list.filter(s => s.room === store.room);
   // Chip counts reflect day + search + room, before the track filter itself is applied
   document.querySelectorAll('#tracks .chip').forEach(b => {
@@ -2813,6 +2832,7 @@ document.addEventListener('click', e => {
   const t = e.target;
   if (t.closest('#days button')) { store.day = t.closest('button').dataset.d; save(); render(); scrollTo(0, 0); return; }
   if (t.closest('#views button')) { store.view = t.closest('button').dataset.v; save(); render(); scrollTo(0, 0); return; }
+  if (t.closest('#clearRoom')) { e.preventDefault(); store.room = ''; save(); render(); return; }
   if (t.id === 'resetTracks') { store.hiddenTracks = []; save(); render(); return; }
   if (t.id === 'clearQ') { e.preventDefault(); const q = document.getElementById('q'); q.value = ''; q.focus(); render(); return; }
   const chip = t.closest('#tracks .chip');

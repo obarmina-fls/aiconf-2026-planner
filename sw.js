@@ -1,7 +1,7 @@
 // Offline-first service worker. build.js stamps the cache version below, so each rebuild gets a fresh cache.
 // Strategy: serve from cache instantly (works offline), refresh the cache in the background when online,
 // so a new build shows up on the next launch.
-const CACHE = 'aiconf26-ba8a5c40ae';
+const CACHE = 'aiconf26-5ca2cf1782';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {

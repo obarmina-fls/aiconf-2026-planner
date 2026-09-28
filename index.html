@@ -100,18 +100,45 @@
   /* Room filter */
   /* Styled like the search box; the native <select> stays (best picker on phones) but loses its default chrome */
   .roomsel { position: relative; flex: 0 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px; height: 38px; padding: 0 10px;
-    background: var(--card); border: 1px solid var(--line); border-radius: 12px; color: var(--muted); transition: border-color .15s, box-shadow .15s, background .15s; }
-  .roomsel:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px; color: var(--muted); cursor: pointer; transition: border-color .15s, box-shadow .15s, background .15s; }
+  .roomsel.open, .roomsel:has(.roomval:focus-visible) { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
   .roomsel > svg { flex: none; width: 15px; height: 15px; }
-  .roomsel select { -webkit-appearance: none; appearance: none; min-width: 0; flex: 1; border: 0; outline: 0; background: none; padding: 0 18px 0 0;
-    color: var(--text); cursor: pointer; text-overflow: ellipsis; }
-  .roomsel select option { color: var(--text); background: var(--card); }
-  .roomsel .chev { position: absolute; right: 10px; pointer-events: none; }
+  .roomval { min-width: 0; flex: 1; border: 0; outline: 0; background: none; padding: 0 20px 0 0; color: var(--text); cursor: pointer; text-align: left;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .roomsel .chev { position: absolute; right: 10px; pointer-events: none; transition: transform .15s; }
+  .roomsel.open .chev { transform: rotate(180deg); }
+  #roomMenu { position: fixed; z-index: 36; display: none; min-width: 250px; padding: 6px; background: var(--card); color: var(--text);
+    border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 14px 36px rgb(0 0 0 / .22); }
+  #roomMenu.show { display: block; animation: rmPop .14s ease-out; }
+  @keyframes rmPop { from { opacity: 0; transform: translateY(-4px); } }
+  .rm-title { font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding: 6px 10px 6px; }
+  .ropt { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; border: 0; background: none; border-radius: 10px;
+    cursor: pointer; text-align: left; font-size: 14.5px; }
+  .ropt:hover, .ropt:focus-visible { background: var(--bg); outline: 0; }
+  .ropt .rn { flex: 1; min-width: 0; }
+  .ropt .rc { font-size: 12px; font-weight: 600; min-width: 28px; text-align: center; padding: 2px 8px; border-radius: 999px; background: var(--bg); color: var(--muted); }
+  .ropt .ck { width: 16px; height: 16px; flex: none; color: var(--accent); visibility: hidden; }
+  .ropt.sel { background: color-mix(in srgb, var(--accent) 10%, var(--card)); color: var(--accent); font-weight: 600; }
+  .ropt.sel .rc { background: var(--accent-bg); color: #fff; }
+  .ropt.sel .ck { visibility: visible; }
+  .ropt.zero:not(.sel) { opacity: .45; }
+  .rm-sep { height: 1px; background: var(--line); margin: 4px 6px; }
+  #roomBackdrop { position: fixed; inset: 0; z-index: 35; display: none; }
+  #roomBackdrop.show { display: block; }
+  @media (max-width: 560px) {
+    #roomMenu { left: 0 !important; right: 0 !important; top: auto !important; bottom: 0; min-width: 0; max-height: 75vh; overflow-y: auto;
+      border-radius: 20px 20px 0 0; padding: 6px 10px calc(14px + env(safe-area-inset-bottom)); }
+    #roomMenu.show { animation: rmUp .22s cubic-bezier(.3,.7,.4,1); }
+    #roomMenu::before { content: ""; display: block; width: 40px; height: 4px; border-radius: 4px; background: var(--line); margin: 4px auto 6px; }
+    .ropt { padding: 13px 12px; font-size: 16px; }
+    #roomBackdrop.show { background: rgb(10 8 20 / .5); }
+  }
+  @keyframes rmUp { from { transform: translateY(100%); } }
   .roomsel .rclear { display: none; flex: none; border: 0; background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent);
     width: 22px; height: 22px; border-radius: 50%; cursor: pointer; padding: 0; place-items: center; }
   .roomsel .rclear svg { width: 12px; height: 12px; }
   .roomsel.on { background: color-mix(in srgb, var(--accent) 9%, var(--card)); border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); color: var(--accent); }
-  .roomsel.on select { color: var(--accent); font-weight: 600; padding-right: 0; }
+  .roomsel.on .roomval { color: var(--accent); font-weight: 600; padding-right: 0; }
   .roomsel.on .chev { display: none; }
   .roomsel.on .rclear { display: grid; }
   @media (max-width: 560px) {
@@ -278,12 +305,12 @@
       <span class="n" id="found"></span>
       <button type="button" class="clear" id="clearQ" title="Clear">✕</button>
     </label>
-    <label class="roomsel" id="roomBox" title="Filter by room">
+    <div class="roomsel" id="roomBox" title="Filter by room">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>
-      <select id="room" aria-label="Filter by room"></select>
+      <button type="button" class="roomval" id="roomBtn" aria-haspopup="listbox" aria-expanded="false" aria-label="Filter by room">All rooms</button>
       <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
       <button type="button" class="rclear" id="clearRoom" title="All rooms" aria-label="Show all rooms"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
-    </label>
+    </div>
   </div>
   <div id="tracks"></div>
 </header>
@@ -310,6 +337,8 @@
 <button class="qrfab" id="qrOpen" title="My contact QR">
   <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/></svg>
 </button>
+<div id="roomBackdrop"></div>
+<div id="roomMenu" role="listbox" aria-label="Filter by room"></div>
 <div id="nm">
   <div class="sheet" id="nmSheet" role="dialog" aria-modal="true" aria-labelledby="nmTitle">
     <div class="nm-head">
@@ -2753,11 +2782,11 @@ function render() {
   if (q) list = list.filter(s => [s.title, s.room, s.track, s.description, store.notes[s.id],
     ...s.speakers.flatMap(p => [p.name, p.organization, p.role])].join(' ').toLowerCase().includes(q));
   // Room dropdown: counts reflect day + search; then filter (All sessions view only)
-  const roomSel = document.getElementById('room');
-  roomSel.innerHTML = `<option value="">All rooms</option>` + ROOMS.map(r =>
-    `<option value="${esc(r)}">${esc(r)} (${list.filter(s => s.room === r).length})</option>`).join('');
-  roomSel.value = store.room;
+  roomCounts = { '': list.length };
+  ROOMS.forEach(r => roomCounts[r] = list.filter(s => s.room === r).length);
+  document.getElementById('roomBtn').textContent = store.room ? `${store.room} · ${roomCounts[store.room]}` : 'All rooms';
   document.getElementById('roomBox').classList.toggle('on', !!store.room);
+  if (document.getElementById('roomMenu').classList.contains('show')) renderRoomMenu();
   if (store.view === 'all' && store.room) list = list.filter(s => s.room === store.room);
   // Chip counts reflect day + search + room, before the track filter itself is applied
   document.querySelectorAll('#tracks .chip').forEach(b => {
@@ -2848,7 +2877,52 @@ document.addEventListener('click', e => {
   if (cardEl) openNotes(cardEl.dataset.id);
 });
 document.getElementById('q').addEventListener('input', render);
-document.getElementById('room').addEventListener('change', e => { store.room = e.target.value; save(); render(); scrollTo(0, 0); });
+// --- Room menu: custom list (native <select> popups can't be styled)
+let roomCounts = {};
+const roomMenu = document.getElementById('roomMenu'), roomBackdrop = document.getElementById('roomBackdrop'), roomBox = document.getElementById('roomBox');
+const ICON_CHECK = '<svg class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+function renderRoomMenu() {
+  const opt = r => `<button class="ropt ${store.room === r ? 'sel' : ''} ${roomCounts[r] ? '' : 'zero'}" data-room="${esc(r)}" role="option" aria-selected="${store.room === r}">
+    ${ICON_CHECK}<span class="rn">${r ? esc(r) : 'All rooms'}</span><span class="rc">${roomCounts[r] ?? 0}</span></button>`;
+  roomMenu.innerHTML = '<div class="rm-title">Filter by room</div>' + opt('') + '<div class="rm-sep"></div>' + ROOMS.map(opt).join('');
+}
+function openRoomMenu() {
+  renderRoomMenu();
+  const r = roomBox.getBoundingClientRect();
+  roomMenu.style.top = r.bottom + 6 + 'px';
+  roomMenu.style.right = Math.max(8, innerWidth - r.right) + 'px';
+  roomMenu.style.left = 'auto';
+  roomMenu.classList.add('show'); roomBackdrop.classList.add('show'); roomBox.classList.add('open');
+  document.getElementById('roomBtn').setAttribute('aria-expanded', 'true');
+  (roomMenu.querySelector('.ropt.sel') || roomMenu.querySelector('.ropt')).focus({ preventScroll: true });
+  history.pushState({ rmenu: 1 }, ''); // Android back closes the menu
+}
+function hideRoomMenu() {
+  if (!roomMenu.classList.contains('show')) return;
+  roomMenu.classList.remove('show'); roomBackdrop.classList.remove('show'); roomBox.classList.remove('open');
+  document.getElementById('roomBtn').setAttribute('aria-expanded', 'false');
+}
+function closeRoomMenu() {
+  if (!roomMenu.classList.contains('show')) return;
+  if (history.state && history.state.rmenu) history.back(); else hideRoomMenu();
+}
+roomBox.addEventListener('click', e => {
+  if (e.target.closest('#clearRoom')) return;
+  roomMenu.classList.contains('show') ? closeRoomMenu() : openRoomMenu();
+});
+roomBackdrop.addEventListener('click', closeRoomMenu);
+roomMenu.addEventListener('click', e => {
+  const b = e.target.closest('.ropt'); if (!b) return;
+  store.room = b.dataset.room; save(); closeRoomMenu(); render(); scrollTo(0, 0);
+});
+roomMenu.addEventListener('keydown', e => {
+  const items = [...roomMenu.querySelectorAll('.ropt')], i = items.indexOf(document.activeElement);
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); items[(i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length].focus(); }
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && roomMenu.classList.contains('show')) closeRoomMenu(); });
+let menuW = innerWidth; // close on rotation / real width change only (mobile address-bar show/hide also fires resize)
+addEventListener('resize', () => { if (innerWidth !== menuW) { menuW = innerWidth; closeRoomMenu(); } });
+window.addEventListener('popstate', hideRoomMenu);
 document.getElementById('printBtn').onclick = () => print();
 document.getElementById('addBtn').onclick = () => document.getElementById('addForm').classList.toggle('show');
 document.getElementById('addForm').onsubmit = e => {

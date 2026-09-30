@@ -3280,7 +3280,18 @@ scrollToNow();
 setInterval(() => document.activeElement.matches('textarea, input') ? (renderUpNext(), placeNowLine()) : render(), 30000);
 
 // Installed-app mode (site/ build served over https): cache everything for offline use
-if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('./sw.js');
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  // A new build's worker takes over right after install: reload once so it shows without a second launch.
+  // Skipped on first install, when there was no previous worker.
+  if (navigator.serviceWorker.controller) {
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => { if (!reloaded) { reloaded = true; location.reload(); } });
+  }
+  navigator.serviceWorker.register('./sw.js').then(reg => {
+    // An installed app resumed from the background doesn't re-navigate, so check for a new build on resume too.
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update(); });
+  });
+}
 </script>
 </body>
 </html>

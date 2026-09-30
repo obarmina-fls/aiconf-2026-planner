@@ -2989,6 +2989,38 @@ const nm = document.getElementById('nm'), nmText = document.getElementById('nmTe
 let nmId = null;
 let shownIds = [], navIds = []; // navIds: snapshot of the visible list when the sheet opened, so starring/unstarring doesn't reshuffle it
 const growNotes = () => { nmText.style.height = 'auto'; nmText.style.height = Math.max(170, nmText.scrollHeight + 2) + 'px'; };
+// On phones the keyboard doesn't shrink the sheet (100dvh), so while typing fit it to the visual viewport:
+// its bottom then sits on top of the keyboard and the body can scroll the caret into view.
+const vv = window.visualViewport;
+function fitSheet() {
+  const typing = nm.classList.contains('show') && document.activeElement === nmText && vv && innerWidth <= 560;
+  nm.style.top = typing ? vv.offsetTop + 'px' : '';
+  nm.style.bottom = typing ? 'auto' : '';
+  nm.style.height = typing ? vv.height + 'px' : '';
+  document.getElementById('nmSheet').style.height = typing ? vv.height + 'px' : '';
+}
+// Caret position inside the auto-growing textarea, measured with an offscreen mirror of its text
+const caretMirror = document.createElement('div');
+function caretTop() {
+  const cs = getComputedStyle(nmText);
+  ['boxSizing', 'width', 'padding', 'border', 'font', 'letterSpacing', 'lineHeight', 'tabSize']
+    .forEach(p => caretMirror.style[p] = cs[p]);
+  Object.assign(caretMirror.style, { position: 'absolute', visibility: 'hidden', left: '-9999px', top: '0', whiteSpace: 'pre-wrap', overflowWrap: 'break-word' });
+  if (!caretMirror.isConnected) document.body.appendChild(caretMirror);
+  caretMirror.textContent = nmText.value.slice(0, nmText.selectionEnd);
+  const mark = caretMirror.appendChild(document.createElement('span')); mark.textContent = '​';
+  return mark.offsetTop;
+}
+function keepCaretVisible() {
+  if (document.activeElement !== nmText) return;
+  const body = nm.querySelector('.nm-body'), b = body.getBoundingClientRect();
+  const lh = parseFloat(getComputedStyle(nmText).lineHeight) || 26, pad = 12;
+  const y = nmText.getBoundingClientRect().top + caretTop();
+  if (y + lh + pad > b.bottom) body.scrollTop += y + lh + pad - b.bottom;
+  else if (y - pad < b.top) body.scrollTop -= b.top - (y - pad);
+}
+const afterEdit = () => requestAnimationFrame(keepCaretVisible);
+if (vv) ['resize', 'scroll'].forEach(ev => vv.addEventListener(ev, () => { fitSheet(); afterEdit(); }));
 function renderSheet() {
   const s = allSessions().find(x => x.id === nmId); if (!s) return;
   const on = s.own || !!store.starred[s.id];
@@ -3005,6 +3037,7 @@ function openNotes(id) {
   navIds = shownIds.includes(id) ? shownIds.slice() : [id];
   if (!fillSheet(id)) return;
   nm.classList.add('show'); document.body.classList.add('modal-open');
+  growNotes(); // measure again now the sheet is visible (it's display:none during fillSheet, so long notes got cut to the minimum)
   history.pushState({ sheet: 1 }, ''); // Android back button closes the sheet instead of leaving the app
 }
 function fillSheet(id) {
@@ -3073,7 +3106,7 @@ function nmSave() {
 }
 function hideSheet() {
   if (!nm.classList.contains('show')) return;
-  nmSave(); nm.classList.remove('show'); document.body.classList.remove('modal-open'); nmId = null; render();
+  nmSave(); nm.classList.remove('show'); document.body.classList.remove('modal-open'); nmId = null; fitSheet(); render();
 }
 function closeNotes() {
   if (!nm.classList.contains('show')) return;
@@ -3092,11 +3125,15 @@ function insertAtCursor(text) {
   const { selectionStart: a, selectionEnd: b, value: v } = nmText;
   const atLineStart = a === 0 || v[a - 1] === '\n';
   const ins = (atLineStart ? '' : '\n') + text;
-  nmText.setRangeText(ins, a, b, 'end'); nmText.focus(); nmSave();
+  nmText.setRangeText(ins, a, b, 'end'); nmText.focus(); nmSave(); afterEdit();
 }
-nmText.addEventListener('input', nmSave);
-nmText.addEventListener('focus', () => document.getElementById('nmSheet').classList.add('typing'));
-nmText.addEventListener('blur', () => document.getElementById('nmSheet').classList.remove('typing'));
+nmText.addEventListener('input', () => { nmSave(); afterEdit(); });
+nmText.addEventListener('focus', () => {
+  document.getElementById('nmSheet').classList.add('typing');
+  fitSheet(); afterEdit();
+  setTimeout(() => { fitSheet(); keepCaretVisible(); }, 350); // again once the keyboard has finished sliding up
+});
+nmText.addEventListener('blur', () => { document.getElementById('nmSheet').classList.remove('typing'); fitSheet(); });
 // Quick-insert taps shouldn't steal focus from the notes box (avoids the bar flickering in and out)
 document.getElementById('nmTools').addEventListener('mousedown', e => e.preventDefault());
 document.getElementById('nmClose').onclick = closeNotes;
@@ -3117,7 +3154,7 @@ nmText.addEventListener('keydown', e => {
   e.preventDefault();
   if (line === m[1]) nmText.setRangeText('', a - line.length, a, 'end');
   else nmText.setRangeText('\n' + m[1].replace('☑', '☐'), a, a, 'end');
-  nmSave();
+  nmSave(); afterEdit();
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && nm.classList.contains('show')) closeNotes(); });
 
